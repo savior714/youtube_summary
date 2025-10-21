@@ -34,11 +34,12 @@ with st.sidebar:
         index=1
     )
     
-    # 언어 설정
-    language = st.selectbox(
-        "언어 설정",
-        ["자동 감지", "한국어", "영어"],
-        index=0
+    # 요약 결과 언어 설정
+    summary_language = st.selectbox(
+        "요약 결과 언어",
+        ["한국어", "영어"],
+        index=0,  # 기본값: 한국어
+        help="요약 결과를 어떤 언어로 생성할지 선택하세요"
     )
     
     # 고급 옵션
@@ -139,18 +140,24 @@ if st.button("🚀 요약하기", type="primary"):
             
             transcript_text = format_transcript(transcript_data)
             
-            # 4단계: 언어 감지
-            detected_lang = detect_language(transcript_text)
-            if language == "자동 감지":
-                final_lang = detected_lang
-            elif language == "한국어":
-                final_lang = "ko"
+            # 4단계: 요약 언어 설정
+            if summary_language == "한국어":
+                target_lang = "ko"
             else:
-                final_lang = "en"
+                target_lang = "en"
             
             # 5단계: 요약 생성
             status_text.text("AI 요약 생성 중...")
             progress_bar.progress(70)
+            
+            # Whisper 처리 시간 안내
+            if "음성 인식" in st.session_state.get('last_method', ''):
+                st.info("""
+                ⏱️ **처리 시간 안내**
+                - 현재 Whisper 음성 인식이 진행 중입니다
+                - 파일 크기에 따라 5-15분 소요될 수 있습니다
+                - 브라우저를 닫지 마세요 (처리가 중단됩니다)
+                """)
             
             # 요약 길이 설정
             length_map = {
@@ -163,7 +170,7 @@ if st.button("🚀 요약하기", type="primary"):
             summarizer = Summarizer()
             summary = summarizer.summarize_text(
                 transcript_text, 
-                language=final_lang,
+                language=target_lang,
                 max_length=max_len,
                 min_length=min_len
             )

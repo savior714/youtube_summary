@@ -10,15 +10,17 @@ class Summarizer:
     def load_models(self):
         """요약 모델 로드"""
         try:
-            # 한국어용 모델
+            # 한국어용 모델 (KoBART)
+            st.info("한국어 요약 모델 (KoBART) 로딩 중...")
             self.models['ko'] = pipeline(
                 "summarization",
-                model="facebook/bart-large-cnn",
-                tokenizer="facebook/bart-large-cnn",
+                model="gogamza/kobart-base-v2",
+                tokenizer="gogamza/kobart-base-v2",
                 device=0 if torch.cuda.is_available() else -1
             )
             
-            # 영어용 모델  
+            # 영어용 모델 (BART-large-cnn)
+            st.info("영어 요약 모델 (BART-large-cnn) 로딩 중...")
             self.models['en'] = pipeline(
                 "summarization", 
                 model="facebook/bart-large-cnn",
