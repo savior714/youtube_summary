@@ -22,6 +22,7 @@ def extract_video_id(url):
 def get_transcript_from_api(video_id):
     """YouTube Transcript API로 자막 추출 시도"""
     try:
+        # 한국어 자막 우선 시도
         transcript_list = YouTubeTranscriptApi.list_transcripts(video_id)
         
         # 한국어 자막 찾기
@@ -58,6 +59,7 @@ def download_audio_with_ytdlp(url):
             'extractaudio': True,
             'audioformat': 'wav',
             'noplaylist': True,
+            'quiet': True,  # 로그 줄이기
         }
         
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
@@ -65,7 +67,7 @@ def download_audio_with_ytdlp(url):
             
         # 다운로드된 파일 찾기
         for file in os.listdir(temp_dir):
-            if file.endswith(('.wav', '.mp3', '.m4a')):
+            if file.endswith(('.wav', '.mp3', '.m4a', '.webm')):
                 return os.path.join(temp_dir, file)
         
         return None
@@ -87,8 +89,11 @@ def transcribe_audio_with_whisper(audio_path):
         text = result["text"]
         
         # 임시 파일 삭제
-        os.remove(audio_path)
-        os.rmdir(os.path.dirname(audio_path))
+        try:
+            os.remove(audio_path)
+            os.rmdir(os.path.dirname(audio_path))
+        except:
+            pass
         
         return text
         

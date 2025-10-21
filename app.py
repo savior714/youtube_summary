@@ -2,7 +2,6 @@ import streamlit as st
 from youtube_utils import extract_video_id, get_transcript, format_transcript, detect_language
 from summarizer import Summarizer
 import time
-import os
 
 # 페이지 설정
 st.set_page_config(
@@ -14,10 +13,6 @@ st.set_page_config(
 # 제목
 st.title("📺 나만의 유튜브 요약 서비스")
 st.markdown("---")
-
-# OpenAI API 키 설정 안내
-if not os.getenv('OPENAI_API_KEY'):
-    st.info("💡 **OpenAI API 키를 설정하면 GPT 모델로 더 정확한 요약을 받을 수 있습니다.** 환경변수 `OPENAI_API_KEY`를 설정하세요.")
 
 # 사이드바 설정
 with st.sidebar:
@@ -44,11 +39,7 @@ with st.sidebar:
         
     # 모델 정보
     with st.expander("모델 정보"):
-        if os.getenv('OPENAI_API_KEY'):
-            st.success("✅ OpenAI GPT 모델 사용 가능")
-        else:
-            st.warning("⚠️ BART 모델 사용 (OpenAI API 키 없음)")
-        
+        st.success("✅ BART 요약 모델 사용")
         st.info("🎤 Whisper 음성 인식 모델 사용 가능")
 
 # 메인 컨텐츠
@@ -177,7 +168,7 @@ st.markdown("""
 <div style='text-align: center; color: #666;'>
     <p>💡 <strong>팁:</strong> 자막이 있는 영상에서만 작동합니다. 자동 생성 자막도 지원합니다.</p>
     <p>🎤 <strong>음성 인식:</strong> 자막이 없는 영상은 Whisper로 음성 인식합니다.</p>
-    <p>🤖 <strong>AI 요약:</strong> OpenAI API 키를 설정하면 GPT 모델을 사용합니다.</p>
+    <p>🤖 <strong>AI 요약:</strong> BART 모델을 사용하여 고품질 요약을 제공합니다.</p>
     <p>🔧 <strong>문제 해결:</strong> 일부 영상은 자막이 없거나 비공개일 수 있습니다.</p>
 </div>
 """, unsafe_allow_html=True)
