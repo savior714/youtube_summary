@@ -1,112 +1,128 @@
-﻿import streamlit as st
+import streamlit as st
 from youtube_utils import extract_video_id, get_transcript, format_transcript, detect_language
 from summarizer import Summarizer
 import time
+import os
 
-# ?섏씠吏 ?ㅼ젙
+# 페이지 설정
 st.set_page_config(
-    page_title="?좏뒠釉??붿빟 ?쒕퉬??,
-    page_icon="?벟",
+    page_title="유튜브 요약 서비스",
+    page_icon="📺",
     layout="wide"
 )
 
-# ?쒕ぉ
-st.title("?벟 ?섎쭔???좏뒠釉??붿빟 ?쒕퉬??)
+# 제목
+st.title("📺 나만의 유튜브 요약 서비스")
 st.markdown("---")
 
-# ?ъ씠?쒕컮 ?ㅼ젙
+# OpenAI API 키 설정 안내
+if not os.getenv('OPENAI_API_KEY'):
+    st.info("💡 **OpenAI API 키를 설정하면 GPT 모델로 더 정확한 요약을 받을 수 있습니다.** 환경변수 `OPENAI_API_KEY`를 설정하세요.")
+
+# 사이드바 설정
 with st.sidebar:
-    st.header("?숋툘 ?ㅼ젙")
+    st.header("⚙️ 설정")
     
-    # ?붿빟 ?듭뀡
+    # 요약 옵션
     summary_length = st.selectbox(
-        "?붿빟 湲몄씠",
-        ["吏㏐쾶 (50-100??", "蹂댄넻 (100-150??", "湲멸쾶 (150-200??"],
+        "요약 길이",
+        ["짧게 (50-100자)", "보통 (100-150자)", "길게 (150-200자)"],
         index=1
     )
     
-    # ?몄뼱 ?ㅼ젙
+    # 언어 설정
     language = st.selectbox(
-        "?몄뼱 ?ㅼ젙",
-        ["?먮룞 媛먯?", "?쒓뎅??, "?곸뼱"],
+        "언어 설정",
+        ["자동 감지", "한국어", "영어"],
         index=0
     )
     
-    # 怨좉툒 ?듭뀡
-    with st.expander("怨좉툒 ?ㅼ젙"):
-        show_transcript = st.checkbox("?먮낯 ?먮쭑 蹂닿린", value=False)
-        chunk_size = st.slider("泥?겕 ?ш린", 500, 2000, 1000)
+    # 고급 옵션
+    with st.expander("고급 설정"):
+        show_transcript = st.checkbox("원본 자막 보기", value=False)
+        use_whisper = st.checkbox("자막 없으면 음성 인식 사용", value=True, help="자막이 없는 영상의 경우 Whisper로 음성 인식")
+        
+    # 모델 정보
+    with st.expander("모델 정보"):
+        if os.getenv('OPENAI_API_KEY'):
+            st.success("✅ OpenAI GPT 모델 사용 가능")
+        else:
+            st.warning("⚠️ BART 모델 사용 (OpenAI API 키 없음)")
+        
+        st.info("🎤 Whisper 음성 인식 모델 사용 가능")
 
-# 硫붿씤 而⑦뀗痢?col1, col2 = st.columns([2, 1])
+# 메인 컨텐츠
+col1, col2 = st.columns([2, 1])
 
 with col1:
-    st.subheader("?뵕 ?좏뒠釉?URL ?낅젰")
+    st.subheader("🔗 유튜브 URL 입력")
     url = st.text_input(
-        "?좏뒠釉?留곹겕瑜??낅젰?섏꽭??",
+        "유튜브 링크를 입력하세요:",
         placeholder="https://www.youtube.com/watch?v=...",
-        help="?좏뒠釉??곸긽 URL???낅젰?섎㈃ ?먮룞?쇰줈 ?먮쭑??異붿텧?섍퀬 ?붿빟?⑸땲??"
+        help="유튜브 영상 URL을 입력하면 자동으로 자막을 추출하고 요약합니다."
     )
 
 with col2:
-    st.subheader("?뱤 ?ъ슜踰?)
+    st.subheader("📊 사용법")
     st.markdown("""
-    1. ?좏뒠釉?URL ?낅젰
-    2. ?ㅼ젙 議곗젙 (?좏깮?ы빆)
-    3. '?붿빟?섍린' 踰꾪듉 ?대┃
-    4. 寃곌낵 ?뺤씤 諛??ㅼ슫濡쒕뱶
+    1. 유튜브 URL 입력
+    2. 설정 조정 (선택사항)
+    3. '요약하기' 버튼 클릭
+    4. 결과 확인 및 다운로드
     """)
 
-# ?붿빟 ?ㅽ뻾
-if st.button("?? ?붿빟?섍린", type="primary"):
+# 요약 실행
+if st.button("🚀 요약하기", type="primary"):
     if not url:
-        st.warning("?좏뒠釉?URL???낅젰?댁＜?몄슂.")
+        st.warning("유튜브 URL을 입력해주세요.")
     else:
-        # 吏꾪뻾 ?곹솴 ?쒖떆
+        # 진행 상황 표시
         progress_bar = st.progress(0)
         status_text = st.empty()
         
         try:
-            # 1?④퀎: 鍮꾨뵒??ID 異붿텧
-            status_text.text("鍮꾨뵒??ID 異붿텧 以?..")
-            progress_bar.progress(20)
+            # 1단계: 비디오 ID 추출
+            status_text.text("비디오 ID 추출 중...")
+            progress_bar.progress(10)
             
             video_id = extract_video_id(url)
             if not video_id:
-                st.error("?좏슚?섏? ?딆? ?좏뒠釉?URL?낅땲??")
+                st.error("유효하지 않은 유튜브 URL입니다.")
                 st.stop()
             
-            # 2?④퀎: ?먮쭑 異붿텧
-            status_text.text("?먮쭑 異붿텧 以?..")
-            progress_bar.progress(40)
+            # 2단계: 자막/음성 추출
+            status_text.text("자막/음성 추출 중...")
+            progress_bar.progress(30)
             
-            transcript_data = get_transcript(video_id)
+            transcript_data = get_transcript(url)
             if not transcript_data:
-                st.error("?먮쭑??李얠쓣 ???놁뒿?덈떎. ?먮쭑???덈뒗 ?곸긽???좏깮?댁＜?몄슂.")
+                st.error("자막/음성 추출에 실패했습니다.")
                 st.stop()
             
-            # 3?④퀎: ?띿뒪??蹂??            status_text.text("?띿뒪??蹂??以?..")
-            progress_bar.progress(60)
+            # 3단계: 텍스트 변환
+            status_text.text("텍스트 변환 중...")
+            progress_bar.progress(50)
             
             transcript_text = format_transcript(transcript_data)
             
-            # 4?④퀎: ?몄뼱 媛먯?
+            # 4단계: 언어 감지
             detected_lang = detect_language(transcript_text)
-            if language == "?먮룞 媛먯?":
+            if language == "자동 감지":
                 final_lang = detected_lang
-            elif language == "?쒓뎅??:
+            elif language == "한국어":
                 final_lang = "ko"
             else:
                 final_lang = "en"
             
-            # 5?④퀎: ?붿빟 ?앹꽦
-            status_text.text("AI ?붿빟 ?앹꽦 以?..")
-            progress_bar.progress(80)
+            # 5단계: 요약 생성
+            status_text.text("AI 요약 생성 중...")
+            progress_bar.progress(70)
             
-            # ?붿빟 湲몄씠 ?ㅼ젙
+            # 요약 길이 설정
             length_map = {
-                "吏㏐쾶 (50-100??": (50, 100),
-                "蹂댄넻 (100-150??": (100, 150), 
-                "湲멸쾶 (150-200??": (150, 200)
+                "짧게 (50-100자)": (50, 100),
+                "보통 (100-150자)": (100, 150), 
+                "길게 (150-200자)": (150, 200)
             }
             min_len, max_len = length_map[summary_length]
             
@@ -119,47 +135,49 @@ if st.button("?? ?붿빟?섍린", type="primary"):
             )
             
             progress_bar.progress(100)
-            status_text.text("?꾨즺!")
+            status_text.text("완료!")
             
-            # 寃곌낵 ?쒖떆
-            st.success("???붿빟???꾨즺?섏뿀?듬땲??")
+            # 결과 표시
+            st.success("✅ 요약이 완료되었습니다!")
             
-            # ?붿빟 寃곌낵
-            st.subheader("?뱷 ?붿빟 寃곌낵")
+            # 요약 결과
+            st.subheader("📝 요약 결과")
             st.write(summary)
             
-            # ?ㅼ슫濡쒕뱶 踰꾪듉
+            # 다운로드 버튼
             st.download_button(
-                label="?뱿 ?붿빟 寃곌낵 ?ㅼ슫濡쒕뱶",
+                label="📥 요약 결과 다운로드",
                 data=summary,
                 file_name=f"youtube_summary_{video_id}.txt",
                 mime="text/plain"
             )
             
-            # ?먮낯 ?먮쭑 ?쒖떆 (?듭뀡)
+            # 원본 자막 표시 (옵션)
             if show_transcript:
-                with st.expander("?뱞 ?먮낯 ?먮쭑 蹂닿린"):
-                    st.text_area("?먮쭑 ?댁슜:", transcript_text, height=300)
+                with st.expander("📄 원본 자막 보기"):
+                    st.text_area("자막 내용:", transcript_text, height=300)
             
-            # ?듦퀎 ?뺣낫
+            # 통계 정보
             col1, col2, col3 = st.columns(3)
             with col1:
-                st.metric("?먮낯 湲몄씠", f"{len(transcript_text):,}??)
+                st.metric("원본 길이", f"{len(transcript_text):,}자")
             with col2:
-                st.metric("?붿빟 湲몄씠", f"{len(summary):,}??)
+                st.metric("요약 길이", f"{len(summary):,}자")
             with col3:
                 compression_ratio = (1 - len(summary) / len(transcript_text)) * 100
-                st.metric("?뺤텞瑜?, f"{compression_ratio:.1f}%")
+                st.metric("압축률", f"{compression_ratio:.1f}%")
                 
         except Exception as e:
-            st.error(f"?ㅻ쪟媛 諛쒖깮?덉뒿?덈떎: {str(e)}")
-            st.info("?ㅻⅨ ?곸긽?쇰줈 ?쒕룄?대낫?몄슂.")
+            st.error(f"오류가 발생했습니다: {str(e)}")
+            st.info("다른 영상으로 시도해보세요.")
 
-# ?명꽣
+# 푸터
 st.markdown("---")
 st.markdown("""
 <div style='text-align: center; color: #666;'>
-    <p>?뮕 <strong>??</strong> ?먮쭑???덈뒗 ?곸긽?먯꽌留??묐룞?⑸땲?? ?먮룞 ?앹꽦 ?먮쭑??吏?먰빀?덈떎.</p>
-    <p>?뵩 <strong>臾몄젣 ?닿껐:</strong> ?쇰? ?곸긽? ?먮쭑???녾굅??鍮꾧났媛쒖씪 ???덉뒿?덈떎.</p>
+    <p>💡 <strong>팁:</strong> 자막이 있는 영상에서만 작동합니다. 자동 생성 자막도 지원합니다.</p>
+    <p>🎤 <strong>음성 인식:</strong> 자막이 없는 영상은 Whisper로 음성 인식합니다.</p>
+    <p>🤖 <strong>AI 요약:</strong> OpenAI API 키를 설정하면 GPT 모델을 사용합니다.</p>
+    <p>🔧 <strong>문제 해결:</strong> 일부 영상은 자막이 없거나 비공개일 수 있습니다.</p>
 </div>
 """, unsafe_allow_html=True)
