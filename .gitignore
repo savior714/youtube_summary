@@ -25,6 +25,10 @@ venv/
 ENV/
 env/
 .venv
+Scripts/
+Include/
+Lib/
+pyvenv.cfg
 
 # IDEs
 .vscode/
@@ -46,3 +50,10 @@ models/
 
 # Logs
 *.log
+
+# Jupyter
+etc/
+share/
+
+# Temporary files
+requirements_simple.txt
