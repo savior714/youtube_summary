@@ -1,6 +1,9 @@
 import streamlit as st
 from youtube_utils import extract_video_id, get_transcript, format_transcript, detect_language
 from summarizer import Summarizer
+from api_summarizer import APISummarizer
+from hybrid_summarizer import HybridSummarizer
+from gpu_utils import display_gpu_status, GPUDetector
 import time
 import os
 
@@ -15,24 +18,19 @@ st.set_page_config(
 st.title("📺 나만의 유튜브 요약 서비스")
 st.markdown("---")
 
-# ffmpeg 설치 안내
-st.info("""
-💡 **첫 사용자 안내**: 
-- 자막이 없는 영상의 경우 음성 인식이 필요합니다
-- Windows 사용자는 [ffmpeg 다운로드](https://www.gyan.dev/ffmpeg/builds/) 후 PATH에 추가하세요
-- 설치 후 브라우저를 새로고침하세요
-""")
 
 # 사이드바 설정
 with st.sidebar:
     st.header("⚙️ 설정")
     
-    # 요약 옵션
-    summary_length = st.selectbox(
-        "요약 길이",
-        ["짧게 (50-100자)", "보통 (100-150자)", "길게 (150-200자)"],
-        index=1
-    )
+    # 자동 모델 선택 안내
+    st.subheader("🤖 LongT5 적응형 모델")
+    st.info("🎯 VRAM에 따라 LongT5 자동 최적화")
+    st.info("• VRAM 12GB+: Full Precision")
+    st.info("• VRAM 8GB+: 8bit 양자화") 
+    st.info("• VRAM 4GB+: 8bit 양자화")
+    st.info("• VRAM 2GB+: 4bit 양자화")
+    st.info("• CPU 환경: BART 모델")
     
     # 요약 결과 언어 설정
     summary_language = st.selectbox(
@@ -43,17 +41,16 @@ with st.sidebar:
     )
     
     # 고급 옵션
-    with st.expander("고급 설정"):
+    with st.expander("고급 설정", expanded=True):
         show_transcript = st.checkbox("원본 자막 보기", value=False)
-        use_whisper = st.checkbox("자막 없으면 음성 인식 사용", value=True, help="자막이 없는 영상의 경우 Whisper로 음성 인식")
         
-    # 모델 정보
-    with st.expander("모델 정보"):
-        st.success("✅ BART 요약 모델 사용")
-        st.info("🎤 Whisper 음성 인식 모델 사용 가능")
         
+    # GPU 상태 확인
+    with st.expander("🖥️ GPU 상태", expanded=True):
+        display_gpu_status()
+    
     # ffmpeg 상태 확인
-    with st.expander("시스템 상태"):
+    with st.expander("🔧 시스템 상태", expanded=True):
         ffmpeg_found = False
         ffmpeg_paths = [
             "C:\\ffmpeg\\bin\\ffmpeg.exe",  # 권장 설치 경로
@@ -85,6 +82,54 @@ with st.sidebar:
             2. `C:\\ffmpeg\\` 폴더에 압축 해제
             3. 최종 경로: `C:\\ffmpeg\\bin\\ffmpeg.exe`
             """)
+
+# 저장된 결과가 있으면 표시
+if 'summary_result' in st.session_state:
+    result = st.session_state['summary_result']
+    
+    # 결과 표시
+    st.success("✅ 요약이 완료되었습니다!")
+    
+    # 요약 방식 표시
+    st.info(f"📊 사용된 요약 방식: {result['summary_method']}")
+    
+    # 요약 결과
+    st.subheader("📝 요약 결과")
+    st.write(result['summary'])
+    
+    # 다운로드 버튼 (초기화 방지)
+    col1, col2 = st.columns([1, 1])
+    with col1:
+        st.download_button(
+            label="📥 요약 결과 다운로드",
+            data=result['summary'],
+            file_name=f"youtube_summary_{result['video_id']}.txt",
+            mime="text/plain",
+            key="download_summary",
+            use_container_width=True
+        )
+    with col2:
+        if st.button("🔄 새로 요약하기", use_container_width=True):
+            # session_state 초기화
+            del st.session_state['summary_result']
+            st.rerun()
+    
+    # 원본 자막 표시 (옵션)
+    if result['show_transcript']:
+        with st.expander("📄 원본 자막 보기"):
+            st.text_area("자막 내용:", result['transcript_text'], height=300)
+    
+    # 통계 정보
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        st.metric("원본 길이", f"{len(result['transcript_text']):,}자")
+    with col2:
+        st.metric("요약 길이", f"{len(result['summary']):,}자")
+    with col3:
+        compression_ratio = (1 - len(result['summary']) / len(result['transcript_text'])) * 100
+        st.metric("압축률", f"{compression_ratio:.1f}%")
+    
+    st.markdown("---")
 
 # 메인 컨텐츠
 col1, col2 = st.columns([2, 1])
@@ -129,7 +174,7 @@ if st.button("🚀 요약하기", type="primary"):
             status_text.text("자막/음성 추출 중...")
             progress_bar.progress(30)
             
-            transcript_data = get_transcript(url)
+            transcript_data = get_transcript(url, use_whisper=True)
             if not transcript_data:
                 st.error("자막/음성 추출에 실패했습니다.")
                 st.stop()
@@ -140,11 +185,31 @@ if st.button("🚀 요약하기", type="primary"):
             
             transcript_text = format_transcript(transcript_data)
             
-            # 4단계: 요약 언어 설정
-            if summary_language == "한국어":
+            # 4단계: 원본 언어 감지 및 요약 언어 설정
+            detected_lang = detect_language(transcript_text)
+            st.info(f"원본 텍스트 언어 감지: {'한국어' if detected_lang == 'ko' else '영어'}")
+            
+            # 원본 언어에 맞는 모델 사용 (품질 우선)
+            if detected_lang == 'ko':
+                # 한국어 원본 → 한국어 요약 (최적)
                 target_lang = "ko"
+                st.info("✅ 한국어 원본 → 한국어 요약 (최적 품질)")
             else:
+                # 영어 원본 → 영어 요약 (최적)
                 target_lang = "en"
+                st.info("✅ 영어 원본 → 영어 요약 (최적 품질)")
+            
+            # 사용자가 다른 언어를 원하는 경우 강제로 원본 언어 사용
+            if (detected_lang == 'ko' and summary_language == "영어") or \
+               (detected_lang == 'en' and summary_language == "한국어"):
+                st.warning("⚠️ 원본 언어와 다른 언어로 요약하면 품질이 심각하게 떨어집니다.")
+                st.info("💡 자동으로 원본 언어에 맞는 모델을 사용합니다.")
+                if detected_lang == 'ko':
+                    target_lang = "ko"
+                    st.info("🔄 한국어 모델로 변경됨")
+                else:
+                    target_lang = "en"
+                    st.info("🔄 영어 모델로 변경됨")
             
             # 5단계: 요약 생성
             status_text.text("AI 요약 생성 중...")
@@ -159,54 +224,51 @@ if st.button("🚀 요약하기", type="primary"):
                 - 브라우저를 닫지 마세요 (처리가 중단됩니다)
                 """)
             
-            # 요약 길이 설정
-            length_map = {
-                "짧게 (50-100자)": (50, 100),
-                "보통 (100-150자)": (100, 150), 
-                "길게 (150-200자)": (150, 200)
-            }
-            min_len, max_len = length_map[summary_length]
+            # 길이 제한 제거 - 자동으로 최적 길이 결정
+            st.info("📏 요약 길이: 자동 조절 (제한 없음)")
             
+            # 자동 모델 선택으로 요약
             summarizer = Summarizer()
             summary = summarizer.summarize_text(
                 transcript_text, 
-                language=target_lang,
-                max_length=max_len,
-                min_length=min_len
+                language=target_lang
             )
+            
+            # 사용된 모델 정보 표시
+            detector = GPUDetector()
+            device_info = detector.get_device_info()
+            vram_gb = device_info["vram_gb"]
+            device = device_info["device"]
+            gpu_name = device_info["gpu_name"]
+            
+            if device == "cuda":
+                if vram_gb >= 12:
+                    summary_method = f"LongT5 Full Precision (GPU: {gpu_name})"
+                elif vram_gb >= 8:
+                    summary_method = f"LongT5 8bit (GPU: {gpu_name})"
+                elif vram_gb >= 4:
+                    summary_method = f"LongT5 8bit (GPU: {gpu_name})"
+                elif vram_gb >= 2:
+                    summary_method = f"LongT5 4bit (GPU: {gpu_name})"
+                else:
+                    summary_method = f"LongT5 4bit (GPU: {gpu_name})"
+            else:
+                summary_method = "BART (CPU)"
             
             progress_bar.progress(100)
             status_text.text("완료!")
             
-            # 결과 표시
-            st.success("✅ 요약이 완료되었습니다!")
+            # 결과를 session_state에 저장
+            st.session_state['summary_result'] = {
+                'summary': summary,
+                'summary_method': summary_method,
+                'video_id': video_id,
+                'transcript_text': transcript_text,
+                'show_transcript': show_transcript
+            }
             
-            # 요약 결과
-            st.subheader("📝 요약 결과")
-            st.write(summary)
-            
-            # 다운로드 버튼
-            st.download_button(
-                label="📥 요약 결과 다운로드",
-                data=summary,
-                file_name=f"youtube_summary_{video_id}.txt",
-                mime="text/plain"
-            )
-            
-            # 원본 자막 표시 (옵션)
-            if show_transcript:
-                with st.expander("📄 원본 자막 보기"):
-                    st.text_area("자막 내용:", transcript_text, height=300)
-            
-            # 통계 정보
-            col1, col2, col3 = st.columns(3)
-            with col1:
-                st.metric("원본 길이", f"{len(transcript_text):,}자")
-            with col2:
-                st.metric("요약 길이", f"{len(summary):,}자")
-            with col3:
-                compression_ratio = (1 - len(summary) / len(transcript_text)) * 100
-                st.metric("압축률", f"{compression_ratio:.1f}%")
+            # 결과가 저장되었으므로 페이지 새로고침
+            st.rerun()
                 
         except Exception as e:
             st.error(f"오류가 발생했습니다: {str(e)}")

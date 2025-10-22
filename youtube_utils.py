@@ -6,6 +6,9 @@ import os
 import tempfile
 import re
 import glob
+import time
+import threading
+from gpu_utils import GPUDetector, get_whisper_model_info
 
 def extract_video_id(url):
     """유튜브 URL에서 비디오 ID 추출 (파라미터 제거)"""
@@ -36,6 +39,30 @@ def download_audio(url, out_dir="tmp", ffmpeg_path=None):
             "noplaylist": True,
             "nocheckcertificate": True,
             "quiet": True,
+            # YouTube 차단 우회 설정
+            "extractor_args": {
+                "youtube": {
+                    "skip": ["dash", "hls"],
+                    "player_skip": ["configs"],
+                    "player_client": ["android", "web"],
+                }
+            },
+            # User-Agent 설정 (여러 옵션)
+            "http_headers": {
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+                "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+                "Accept-Language": "en-us,en;q=0.5",
+                "Accept-Encoding": "gzip, deflate",
+                "DNT": "1",
+                "Connection": "keep-alive",
+                "Upgrade-Insecure-Requests": "1",
+            },
+            # 추가 옵션
+            "ignoreerrors": True,
+            "extract_flat": False,
+            "no_warnings": True,
+            "geo_bypass": True,
+            "geo_bypass_country": "US",
         }
         
         # ffmpeg 경로가 지정된 경우
@@ -155,11 +182,35 @@ def transcribe_audio_with_whisper(audio_path):
         if not ffmpeg_found:
             st.warning("ffmpeg를 찾을 수 없습니다. 환경변수 PATH를 확인하세요.")
         
-        # Whisper 모델 로드 (base 모델 사용)
-        with progress_container:
-            st.info("🤖 Whisper 모델 로딩 중... (처음 실행 시 다운로드 시간 추가)")
+        # GPU 감지 및 최적 모델 선택
+        detector = GPUDetector()
+        device_info = detector.get_device_info()
         
-        model = whisper.load_model("base")
+        optimal_model = device_info["optimal_model"]
+        device = device_info["device"]
+        gpu_name = device_info["gpu_name"]
+        vram_gb = device_info["vram_gb"]
+        
+        # 처리 시간 추정
+        if device == "cuda":
+            estimated_minutes = max(1, int(file_size_mb * 0.3))  # GPU는 더 빠름
+            st.info(f"⏱️ 예상 처리 시간: {estimated_minutes}분 (GPU: {gpu_name})")
+        else:
+            estimated_minutes = max(1, int(file_size_mb * 0.8))  # CPU는 더 느림
+            st.info(f"⏱️ 예상 처리 시간: {estimated_minutes}분 (CPU 사용)")
+        
+        # Whisper 모델 로드 (최적 모델 사용)
+        with progress_container:
+            st.info(f"🤖 Whisper 모델 로딩 중... ({optimal_model}, {device})")
+        
+        try:
+            model = whisper.load_model(optimal_model, device=device)
+            st.success(f"✅ {optimal_model} 모델 로드 완료 ({device})")
+        except Exception as e:
+            st.warning(f"⚠️ {optimal_model} 모델 로드 실패: {str(e)}")
+            st.info("🔄 base 모델로 fallback...")
+            model = whisper.load_model("base", device="cpu")
+            device = "cpu"
         
         # 음성 인식 (ffmpeg 경로 지정)
         if ffmpeg_found and ffmpeg_found != "ffmpeg":
@@ -175,25 +226,54 @@ def transcribe_audio_with_whisper(audio_path):
             # 진행률 표시
             progress_bar = st.progress(0)
             status_text = st.empty()
+            time_estimate = st.empty()
             
-            # 간단한 진행률 시뮬레이션 (실제 Whisper는 진행률을 제공하지 않음)
-            import time
-            import threading
-            
-            def update_progress():
-                for i in range(10):
-                    time.sleep(2)  # 2초마다 업데이트
-                    progress_value = (i + 1) * 0.1
-                    progress_bar.progress(progress_value)
-                    status_text.text(f"음성 인식 진행 중... {int(progress_value * 100)}%")
+            # Whisper 진행률을 실시간으로 표시하는 함수
+            def update_progress_with_whisper():
+                import time
+                start_time = time.time()
+                total_estimated_time = estimated_minutes * 60  # 초 단위로 변환
+                
+                while True:
+                    elapsed_time = time.time() - start_time
+                    progress_ratio = min(elapsed_time / total_estimated_time, 0.95)  # 95%까지만 표시
+                    
+                    # 진행률 업데이트
+                    progress_bar.progress(progress_ratio)
+                    status_text.text(f"음성 인식 진행 중... {int(progress_ratio * 100)}%")
+                    
+                    # 남은 시간 계산
+                    if progress_ratio < 0.95:
+                        remaining_time = (total_estimated_time - elapsed_time) / 60  # 분 단위
+                        time_estimate.text(f"⏱️ 예상 남은 시간: {remaining_time:.1f}분")
+                    else:
+                        time_estimate.text("⏱️ 거의 완료됨...")
+                    
+                    time.sleep(1)  # 1초마다 업데이트
             
             # 백그라운드에서 진행률 업데이트
-            progress_thread = threading.Thread(target=update_progress)
+            progress_thread = threading.Thread(target=update_progress_with_whisper)
             progress_thread.daemon = True
             progress_thread.start()
         
-        # Whisper 옵션 설정 (올바른 매개변수만 사용)
-        result = model.transcribe(abs_audio_path, language="ko", verbose=False)
+        # Whisper 옵션 설정 (진행률 표시 포함)
+        try:
+            # Whisper 실행 중 진행률 업데이트를 위한 스레드 종료
+            if 'progress_thread' in locals():
+                progress_thread.join(timeout=0.1)
+            
+            # Whisper 실행 (진행률 표시)
+            with progress_container:
+                progress_bar.progress(0.95)
+                status_text.text("🎤 Whisper 음성 인식 최종 처리 중...")
+                time_estimate.text("⏱️ 거의 완료됨...")
+            
+            # 언어 자동 감지 (영어 우선)
+            result = model.transcribe(abs_audio_path, language=None, verbose=True)
+            
+        except Exception as e:
+            st.error(f"Whisper 실행 중 오류: {str(e)}")
+            return None
         
         # 텍스트 추출
         text = result["text"]
@@ -204,7 +284,13 @@ def transcribe_audio_with_whisper(audio_path):
             status_text.text("음성 인식 완료!")
         
         # 성공 메시지
-        st.success("✅ 음성 인식 완료!")
+        st.success(f"✅ 음성 인식 완료! (사용된 모델: {optimal_model})")
+        
+        # 메모리 정리
+        del model
+        if device == "cuda":
+            import torch
+            torch.cuda.empty_cache()
         
         # 임시 파일 정리
         try:
@@ -221,7 +307,7 @@ def transcribe_audio_with_whisper(audio_path):
         st.exception(e)  # 상세한 오류 정보 표시
         return None
 
-def get_transcript(url):
+def get_transcript(url, use_whisper=True):
     """자막 추출 (API 우선, 실패시 음성 인식)"""
     video_id = extract_video_id(url)
     if not video_id:
@@ -236,7 +322,11 @@ def get_transcript(url):
         st.success("자막 API로 성공!")
         return [{"text": text, "start": 0, "duration": 0}]
     
-    # 2단계: yt-dlp + Whisper로 음성 인식
+    # 2단계: yt-dlp + Whisper로 음성 인식 (use_whisper가 True인 경우만)
+    if not use_whisper:
+        st.error("자막을 찾을 수 없습니다. 음성 인식 옵션이 비활성화되어 있습니다.")
+        return None
+    
     st.info("자막이 없어서 음성 인식으로 시도 중...")
     
     # 오디오 다운로드
