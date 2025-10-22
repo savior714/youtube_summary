@@ -5,12 +5,13 @@ Lilys AI와 같은 유튜브 요약 서비스의 제약 없이 자유롭게 사�
 ## ✨ 주요 기능
 
 - 🎯 **자동 자막 추출**: 유튜브 영상의 자막을 자동으로 추출
-- 🤖 **AI 요약**: Hugging Face BART 모델을 사용한 고품질 요약
+- 🚀 **LongT5 적응형 AI**: GPU VRAM에 따른 자동 최적화된 요약 시스템
 - 🌐 **다국어 지원**: 한국어/영어 자동 감지 및 처리
-- ⚙️ **맞춤 설정**: 요약 길이, 언어 등 사용자 설정 가능
+- ⚙️ **스마트 최적화**: VRAM별 자동 모델 선택 (Full Precision/8bit/4bit)
 - 📱 **간편한 UI**: Streamlit 기반 직관적인 웹 인터페이스
 - 📥 **다운로드**: 요약 결과를 텍스트 파일로 저장
 - 🎤 **음성 인식**: 자막이 없는 영상은 Whisper로 음성 인식
+- 🧠 **청크 처리**: 긴 텍스트도 안정적으로 처리하는 고급 요약 기술
 
 ## 🚀 설치 및 실행
 
@@ -57,27 +58,47 @@ streamlit run app.py
 - **Frontend**: Streamlit
 - **자막 추출**: youtube-transcript-api
 - **음성 인식**: yt-dlp + Whisper
-- **AI 요약**: Hugging Face Transformers (BART)
+- **AI 요약**: LongT5 (google/long-t5-tglobal-base) + BART fallback
+- **최적화**: bitsandbytes (양자화), accelerate (분산 처리)
 - **언어**: Python 3.8+
 
 ## 📁 프로젝트 구조
 
 ```
 youtube/
-├── app.py              # Streamlit 메인 애플리케이션
-├── youtube_utils.py    # 유튜브 자막 추출 모듈
-├── summarizer.py       # AI 요약 모듈
-├── requirements.txt    # 의존성 패키지
-└── README.md          # 프로젝트 설명서
+├── app.py                 # Streamlit 메인 애플리케이션
+├── youtube_utils.py       # 유튜브 자막 추출 모듈
+├── summarizer.py          # LongT5 적응형 AI 요약 모듈
+├── gpu_utils.py           # GPU 감지 및 최적화 모듈
+├── api_summarizer.py      # API 기반 요약 모듈
+├── hybrid_summarizer.py   # 하이브리드 요약 모듈
+├── requirements.txt       # 의존성 패키지
+└── README.md             # 프로젝트 설명서
 ```
+
+## 🚀 LongT5 적응형 시스템
+
+### VRAM별 자동 최적화
+- **VRAM 12GB+**: Full Precision 모드 (청크 8K, 토큰 800)
+- **VRAM 8GB+**: 8bit 양자화 (청크 4K, 토큰 600)  
+- **VRAM 4GB+**: 8bit 양자화 (청크 2.5K, 토큰 400)
+- **VRAM 2GB+**: 4bit 양자화 (청크 1.8K, 토큰 300)
+- **CPU**: BART 모델 fallback
+
+### 🧠 고급 기능
+- **청크 기반 처리**: 긴 텍스트를 안전하게 분할하여 처리
+- **메모리 효율성**: 양자화를 통한 VRAM 절약
+- **자동 fallback**: LongT5 실패 시 BART 모델로 자동 전환
+- **프롬프트 최적화**: 언어별 맞춤형 요약 지시
 
 ## ⚠️ 주의사항
 
 - 자막이 있는 영상에서만 작동합니다
 - 자동 생성 자막도 지원합니다
 - 일부 비공개 영상은 접근할 수 없습니다
-- GPU가 있으면 더 빠른 처리가 가능합니다
+- **GPU 권장**: LongT5 적응형 시스템으로 더 빠른 처리 가능
 - **ffmpeg 설치 필수**: 자막이 없는 영상의 음성 인식에 필요
+- **메모리 요구사항**: 최소 2GB VRAM 권장 (4GB 이상 권장)
 
 ## 🐛 문제 해결
 
@@ -89,12 +110,19 @@ youtube/
 ### 요약이 제대로 되지 않는 경우
 - 영상 길이가 너무 짧거나 긴 경우
 - 자막 품질이 낮은 경우
-- 요약 길이 설정을 조정해보세요
+- GPU VRAM이 부족한 경우 (CPU 모드로 자동 전환됨)
+- LongT5 모델 로딩 실패 시 BART 모델로 자동 fallback
 
 ### ffmpeg 관련 오류
 - `C:\ffmpeg\bin\ffmpeg.exe` 경로에 ffmpeg가 설치되어 있는지 확인
 - 시스템 환경변수 PATH에 `C:\ffmpeg\bin` 추가
 - 브라우저를 새로고침하여 환경변수 적용
+
+### LongT5 모델 관련 오류
+- **bitsandbytes 설치 오류**: `pip install bitsandbytes` 재설치
+- **CUDA 호환성**: PyTorch CUDA 버전 확인
+- **메모리 부족**: VRAM이 부족하면 자동으로 BART 모델로 전환
+- **모델 다운로드**: 첫 실행 시 LongT5 모델 자동 다운로드 (시간 소요)
 
 ## 📞 지원
 
