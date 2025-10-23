@@ -285,7 +285,7 @@ class Summarizer:
                 # 프롬프트 기반 청크 요약
                 if language == 'ko':
                     prompt_chunk = f"다음 텍스트의 핵심 내용을 상세히 요약해주세요. 구체적인 정보와 세부사항을 포함해주세요:\n\n{chunk}"
-                else:
+            else:
                     prompt_chunk = f"Summarize the key points of the following text in detail, including specific information:\n\n{chunk}"
                 
                 # 안전한 길이로 요약 (토큰 길이 고려)
