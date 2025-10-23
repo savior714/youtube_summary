@@ -27,7 +27,6 @@ class GPUDetector:
             
             # 첫 번째 GPU 정보 가져오기
             gpu_name = torch.cuda.get_device_name(0)
-            st.success(f"✅ GPU 감지됨: {gpu_name}")
             
             # nvidia-smi로 VRAM 정보 가져오기
             vram_gb = self._get_vram_from_nvidia_smi()
@@ -35,14 +34,10 @@ class GPUDetector:
             if vram_gb == 0:
                 # nvidia-smi 실패 시 PyTorch로 추정
                 vram_gb = self._estimate_vram_from_torch()
-                st.info(f"PyTorch로 VRAM 추정: {vram_gb:.1f}GB")
-            else:
-                st.info(f"nvidia-smi로 VRAM 확인: {vram_gb:.1f}GB")
             
             # GTX 1650 특별 처리 (4GB VRAM)
             if "GTX 1650" in gpu_name or "1650" in gpu_name or "GeForce GTX 1650" in gpu_name:
                 vram_gb = 4.0  # GTX 1650은 4GB VRAM
-                st.success("🎯 GTX 1650 감지됨 - 4GB VRAM으로 설정")
             
             # 기타 GPU들에 대한 VRAM 추정
             if vram_gb < 2.0:  # VRAM이 너무 작으면 추정값 사용
