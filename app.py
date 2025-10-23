@@ -24,13 +24,9 @@ with st.sidebar:
     st.header("⚙️ 설정")
     
     # 자동 모델 선택 안내
-    st.subheader("🤖 LongT5 적응형 모델")
-    st.info("🎯 VRAM에 따라 LongT5 자동 최적화")
-    st.info("• VRAM 12GB+: Full Precision")
-    st.info("• VRAM 8GB+: 8bit 양자화") 
-    st.info("• VRAM 4GB+: 8bit 양자화")
-    st.info("• VRAM 2GB+: 4bit 양자화")
-    st.info("• CPU 환경: BART 모델")
+    with st.expander("🤖 LongT5 적응형 모델", expanded=False):
+        st.info("🎯 VRAM에 따라 자동 최적화")
+        st.caption("12GB+: Full Precision | 8GB+: 8bit | 4GB+: 8bit | 2GB+: 4bit | CPU: BART")
     
     # 요약 결과 언어 설정
     summary_language = st.selectbox(
