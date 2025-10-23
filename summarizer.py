@@ -331,7 +331,7 @@ class Summarizer:
                     min_length=300    # 더 큰 최소 길이로 상세한 요약 보장
                 )
                 return final_summary[0]['summary_text']
-            except Exception as e:
+        except Exception as e:
                 st.warning(f"최종 요약 실패, 청크 요약 결합: {str(e)}")
                 return combined_summaries
     
