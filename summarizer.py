@@ -161,14 +161,16 @@ class Summarizer:
                     max_length=4096
                 ).to(self.device)
                 
-                # 요약 생성
+                # 요약 생성 (일관성을 위해 deterministic 설정)
                 with torch.no_grad():
                     output = self.longt5_model.generate(
                         **inputs,
                         max_new_tokens=self.max_new_tokens,
                         no_repeat_ngram_size=3,
-                        temperature=0.7,
-                        do_sample=True
+                        num_beams=4,  # 빔 서치로 더 안정적인 결과
+                        early_stopping=True,
+                        do_sample=False,  # 샘플링 비활성화로 일관성 확보
+                        temperature=1.0  # do_sample=False일 때는 무시됨
                     )
                 
                 # 결과 디코딩
@@ -210,8 +212,10 @@ class Summarizer:
                     **final_inputs,
                     max_new_tokens=self.max_new_tokens,
                     no_repeat_ngram_size=3,
-                    temperature=0.7,
-                    do_sample=True
+                    num_beams=4,  # 빔 서치로 더 안정적인 결과
+                    early_stopping=True,
+                    do_sample=False,  # 샘플링 비활성화로 일관성 확보
+                    temperature=1.0  # do_sample=False일 때는 무시됨
                 )
                 
                 final_summary = self.longt5_tokenizer.decode(final_output[0], skip_special_tokens=True)
