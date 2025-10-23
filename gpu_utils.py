@@ -149,18 +149,17 @@ def display_gpu_status():
     device_info = detector.get_device_info()
     
     if device_info["gpu_available"]:
-        st.success(f"✅ GPU 감지됨: {device_info['gpu_name']}")
-        st.info(f"💾 VRAM: {device_info['vram_gb']:.1f}GB")
-        st.info(f"🎯 선택된 모델: {device_info['optimal_model']}")
+        # 간결한 한 줄 표시
+        st.success(f"✅ GPU 감지됨: {device_info['gpu_name']} ({device_info['vram_gb']:.1f}GB VRAM)")
         
-        # 모델별 VRAM 요구사항 표시
+        # 모델별 VRAM 요구사항 표시 (간결하게)
         model_info = get_whisper_model_info()
-        st.write("**모델별 VRAM 요구사항:**")
+        st.write("**Whisper 모델별 VRAM 요구사항:**")
         for model, info in model_info.items():
             status = "✅" if device_info["vram_gb"] >= info["vram_gb"] else "❌"
             st.write(f"{status} **{model}**: {info['vram_gb']}GB - {info['description']}")
     else:
         st.warning("⚠️ GPU를 감지할 수 없습니다. CPU 모드로 실행됩니다.")
-        st.info("🎯 CPU 모드: base 모델 사용")
+        st.info("🎯 CPU 모드: BART 모델 사용")
     
     return device_info
