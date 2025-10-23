@@ -92,9 +92,55 @@ refactor: 코드 리팩토링
 - 수정 후 사용자 확인 대기
 - 명시적 요청 시에만 커밋
 
-### Git 명령 실행
-- PowerShell에서는 Git 명령 사용 불가
-- Git Bash 사용 권장
+### Git 명령 실행 (PowerShell)
+PowerShell에서는 반드시 Git 전체 경로를 사용해야 합니다:
+
+```powershell
+# ✅ 올바른 방법
+& "C:\Program Files\Git\cmd\git.exe" status
+& "C:\Program Files\Git\cmd\git.exe" add .
+& "C:\Program Files\Git\cmd\git.exe" commit -m "메시지"
+& "C:\Program Files\Git\cmd\git.exe" push origin main
+
+# ❌ 잘못된 방법 (작동하지 않음)
+git status
+git add .
+git commit -m "메시지"
+git push origin main
+```
+
+### Git 푸시 프로토콜
+사용자가 "git에 푸시해 줘" 요청 시:
+
+1. **Git 설치 확인**
+   ```powershell
+   Test-Path "C:\Program Files\Git\cmd\git.exe"
+   ```
+
+2. **현재 상태 확인**
+   ```powershell
+   & "C:\Program Files\Git\cmd\git.exe" status
+   ```
+
+3. **변경사항 스테이징**
+   ```powershell
+   & "C:\Program Files\Git\cmd\git.exe" add .
+   ```
+
+4. **커밋**
+   ```powershell
+   & "C:\Program Files\Git\cmd\git.exe" commit -m "커밋 메시지"
+   ```
+
+5. **푸시**
+   ```powershell
+   & "C:\Program Files\Git\cmd\git.exe" push origin main
+   ```
+
+6. **결과 확인 및 보고**
+   - 커밋 ID 확인
+   - 푸시된 파일 개수 확인
+   - 성공 메시지 출력
 
 ---
 
