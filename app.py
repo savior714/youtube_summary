@@ -23,11 +23,6 @@ st.markdown("---")
 with st.sidebar:
     st.header("⚙️ 설정")
     
-    # 자동 모델 선택 안내
-    with st.expander("🤖 LongT5 적응형 모델", expanded=True):
-        st.info("요약 모델: LongT5 적응형 모델")
-        st.caption("12GB+: Full Precision | 8GB+: 8bit | 4GB+: 8bit | 2GB+: 4bit | CPU: BART")
-    
     # 요약 결과 언어 설정
     summary_language = st.selectbox(
         "요약 결과 언어",
