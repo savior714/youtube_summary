@@ -129,18 +129,29 @@ class Summarizer:
             return f"요약 실패: {str(e)}"
     
     def _summarize_with_longt5(self, text, language):
-        """LongT5 적응형 요약"""
+        """LongT5 적응형 요약 - 원본 내용 보존 중심"""
         import torch
         
-        # 프롬프트 설정
-        if language == 'ko':
-            prompt_prefix = "다음 텍스트를 상세하고 체계적으로 요약해주세요. 주요 내용을 구체적으로 설명하고, 중요한 세부사항을 포함해주세요:\n\n"
-        else:
-            prompt_prefix = "Please provide a detailed and comprehensive summary of the following text. Include specific details and key points:\n\n"
+        # 텍스트가 짧으면 한 번에 요약 (재귀 방지)
+        if len(text) <= self.chunk_size * 1.5:
+            st.info(f"📝 텍스트 길이가 적당하여 한 번에 요약합니다 ({len(text)}자)")
+            return self._summarize_single_chunk(text, language)
         
-        # 텍스트를 청크로 분할
-        chunks = [text[i:i+self.chunk_size] for i in range(0, len(text), self.chunk_size)]
-        st.info(f"📊 총 {len(chunks)}개 청크로 분할됨 (청크 크기: {self.chunk_size}자)")
+        # 프롬프트 설정 - 원본 내용 보존 강조
+        if language == 'ko':
+            prompt_prefix = "다음 텍스트의 핵심 내용을 요약해주세요. 원본의 주요 사실과 정보를 그대로 유지하면서 간결하게 정리해주세요:\n\n"
+        else:
+            prompt_prefix = "Summarize the following text. Preserve the main facts and information from the original while keeping it concise:\n\n"
+        
+        # 텍스트를 청크로 분할 (겹치는 부분 추가로 맥락 보존)
+        overlap = self.chunk_size // 4  # 25% 겹침
+        chunks = []
+        for i in range(0, len(text), self.chunk_size - overlap):
+            chunk = text[i:i+self.chunk_size]
+            if chunk.strip():
+                chunks.append(chunk)
+        
+        st.info(f"📊 총 {len(chunks)}개 청크로 분할됨 (청크 크기: {self.chunk_size}자, 겹침: {overlap}자)")
         
         chunk_summaries = []
         progress_text = st.empty()
@@ -189,48 +200,54 @@ class Summarizer:
         
         progress_text.success(f"✅ 청크 요약 완료: {len(chunk_summaries)}개 청크 처리됨")
         
-        # 최종 요약 생성
+        # 청크 요약들을 단순히 연결 (재귀 요약 방지)
         if len(chunk_summaries) > 1:
-            st.info("🔄 최종 요약 생성 중...")
-            combined_summaries = " ".join(chunk_summaries)
-            
-            try:
-                # 최종 요약 프롬프트
-                if language == 'ko':
-                    final_prompt = f"다음 내용들을 종합하여 체계적이고 상세한 최종 요약을 작성해주세요. 주요 내용을 구체적으로 설명하고, 중요한 세부사항을 모두 포함해주세요:\n\n{combined_summaries}"
-                else:
-                    final_prompt = f"Please create a comprehensive and detailed final summary by synthesizing the following content. Include all key points and specific details:\n\n{combined_summaries}"
-                
-                final_inputs = self.longt5_tokenizer(
-                    final_prompt,
-                    return_tensors="pt",
-                    truncation=True,
-                    max_length=4096
-                ).to(self.device)
-                
-                final_output = self.longt5_model.generate(
-                    **final_inputs,
-                    max_new_tokens=self.max_new_tokens,
-                    no_repeat_ngram_size=3,
-                    num_beams=4,  # 빔 서치로 더 안정적인 결과
-                    early_stopping=True,
-                    do_sample=False,  # 샘플링 비활성화로 일관성 확보
-                    temperature=1.0  # do_sample=False일 때는 무시됨
-                )
-                
-                final_summary = self.longt5_tokenizer.decode(final_output[0], skip_special_tokens=True)
-                
-                # VRAM 정리
-                if self.device == "cuda":
-                    torch.cuda.empty_cache()
-                
-                return self._postprocess_summary(final_summary, language)
-                
-            except Exception as e:
-                st.warning(f"최종 요약 실패, 청크 요약 결합: {str(e)}")
-                return self._postprocess_summary(combined_summaries, language)
+            st.info("✅ 청크 요약들을 결합합니다 (재귀 요약 없이 원본 보존)")
+            # 각 청크 요약에 구분자 추가
+            combined_summaries = "\n\n".join([f"[Part {i+1}]\n{summary}" for i, summary in enumerate(chunk_summaries)])
+            return self._postprocess_summary(combined_summaries, language)
         else:
             return self._postprocess_summary(chunk_summaries[0], language)
+    
+    def _summarize_single_chunk(self, text, language):
+        """단일 청크 요약"""
+        import torch
+        
+        # 프롬프트 설정
+        if language == 'ko':
+            prompt = f"다음 텍스트의 핵심 내용을 요약해주세요. 원본의 주요 사실과 정보를 그대로 유지하면서 간결하게 정리해주세요:\n\n{text}"
+        else:
+            prompt = f"Summarize the following text. Preserve the main facts and information from the original while keeping it concise:\n\n{text}"
+        
+        try:
+            inputs = self.longt5_tokenizer(
+                prompt,
+                return_tensors="pt",
+                truncation=True,
+                max_length=4096
+            ).to(self.device)
+            
+            with torch.no_grad():
+                output = self.longt5_model.generate(
+                    **inputs,
+                    max_new_tokens=self.max_new_tokens,
+                    no_repeat_ngram_size=3,
+                    num_beams=4,
+                    early_stopping=True,
+                    do_sample=False,
+                    temperature=1.0
+                )
+            
+            summary = self.longt5_tokenizer.decode(output[0], skip_special_tokens=True)
+            
+            if self.device == "cuda":
+                torch.cuda.empty_cache()
+            
+            return self._postprocess_summary(summary, language)
+            
+        except Exception as e:
+            st.error(f"단일 청크 요약 실패: {str(e)}")
+            return text[:1000] + "..."
     
     def _summarize_with_bart(self, text, language):
         """BART 모델 fallback 요약"""
