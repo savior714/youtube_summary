@@ -1,0 +1,12 @@
+{
+    "git.ignoreLimitWarning": true,
+    "python.defaultInterpreterPath": "${workspaceFolder}/Scripts/python.exe",
+    "python.analysis.extraPaths": [
+        "${workspaceFolder}/Lib/site-packages"
+    ],
+    "terminal.integrated.cwd": "${workspaceFolder}",
+    "files.associations": {
+        "*.bat": "bat",
+        "*.ps1": "powershell"
+    }
+}

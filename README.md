@@ -15,34 +15,48 @@ Lilys AI와 같은 유튜브 요약 서비스의 제약 없이 자유롭게 사�
 
 ## 🚀 설치 및 실행
 
-### 1. ffmpeg 설치 (필수)
+### 빠른 시작 (Windows)
 
-**Windows 사용자:**
-1. [ffmpeg 다운로드](https://www.gyan.dev/ffmpeg/builds/)에서 `ffmpeg-release-essentials.zip` 다운로드
+**방법 1: 자동 실행 스크립트 (권장)**
+```bash
+# PowerShell
+.\start_app.ps1
+
+# 또는 CMD
+start_app.bat
+```
+
+**방법 2: 수동 실행**
+```bash
+# 패키지 설치
+pip install -r requirements.txt
+
+# 실행
+streamlit run app.py
+```
+
+### 상세 설정 가이드
+자세한 설정 및 문제 해결은 [SETUP.md](SETUP.md)를 참고하세요.
+
+### 1. ffmpeg 설치 (선택사항)
+자막이 없는 영상의 음성 인식에 필요합니다.
+
+**Windows:**
+1. [ffmpeg 다운로드](https://www.gyan.dev/ffmpeg/builds/)
 2. `C:\ffmpeg\` 폴더에 압축 해제
 3. 최종 경로: `C:\ffmpeg\bin\ffmpeg.exe`
 
-**macOS 사용자:**
+**macOS:**
 ```bash
 brew install ffmpeg
 ```
 
-**Linux 사용자:**
+**Linux:**
 ```bash
 sudo apt-get update && sudo apt-get install -y ffmpeg
 ```
 
-### 2. Python 패키지 설치
-```bash
-pip install -r requirements.txt
-```
-
-### 3. 애플리케이션 실행
-```bash
-streamlit run app.py
-```
-
-### 4. 브라우저에서 접속
+### 2. 브라우저에서 접속
 - 자동으로 브라우저가 열리거나
 - `http://localhost:8501`로 접속
 
@@ -102,6 +116,35 @@ youtube/
 
 ## 🐛 문제 해결
 
+### 재부팅 후 실행이 안 되는 경우
+```bash
+# 가장 간단한 방법
+.\start_app.bat
+
+# 또는
+.\start_app.ps1
+```
+
+### "Could not find platform independent libraries" 오류
+가상환경이 손상된 경우입니다. 프로젝트 루트 환경을 사용하세요:
+```bash
+.\Scripts\streamlit.exe run app.py
+```
+
+### "streamlit 용어가 인식되지 않습니다" 오류
+```bash
+# 방법 1: 직접 경로 지정
+.\Scripts\streamlit.exe run app.py
+
+# 방법 2: Python 모듈로 실행
+python -m streamlit run app.py
+```
+
+### "ModuleNotFoundError" 오류
+```bash
+pip install -r requirements.txt
+```
+
 ### 자막을 찾을 수 없는 경우
 - 영상에 자막이 있는지 확인
 - 다른 영상으로 시도
@@ -113,16 +156,7 @@ youtube/
 - GPU VRAM이 부족한 경우 (CPU 모드로 자동 전환됨)
 - LongT5 모델 로딩 실패 시 BART 모델로 자동 fallback
 
-### ffmpeg 관련 오류
-- `C:\ffmpeg\bin\ffmpeg.exe` 경로에 ffmpeg가 설치되어 있는지 확인
-- 시스템 환경변수 PATH에 `C:\ffmpeg\bin` 추가
-- 브라우저를 새로고침하여 환경변수 적용
-
-### LongT5 모델 관련 오류
-- **bitsandbytes 설치 오류**: `pip install bitsandbytes` 재설치
-- **CUDA 호환성**: PyTorch CUDA 버전 확인
-- **메모리 부족**: VRAM이 부족하면 자동으로 BART 모델로 전환
-- **모델 다운로드**: 첫 실행 시 LongT5 모델 자동 다운로드 (시간 소요)
+**더 자세한 문제 해결은 [SETUP.md](SETUP.md)를 참고하세요.**
 
 ## 📞 지원
 

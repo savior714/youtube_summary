@@ -105,10 +105,11 @@ if 'summary_result' in st.session_state:
             del st.session_state['summary_result']
             st.rerun()
     
-    # 원본 자막 표시 (옵션)
-    if result['show_transcript']:
-        with st.expander("📄 원본 자막 보기"):
-            st.text_area("자막 내용:", result['transcript_text'], height=300)
+    # 원본 자막 표시 (동적으로 체크박스 상태에 따라 표시)
+    # 사이드바의 show_transcript 값을 사용하여 동적으로 표시
+    if show_transcript:
+        with st.expander("📄 원본 자막 보기", expanded=True):
+            st.text_area("자막 내용:", result['transcript_text'], height=300, key="transcript_display")
     
     # 통계 정보
     col1, col2, col3 = st.columns(3)

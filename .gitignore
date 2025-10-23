@@ -22,6 +22,7 @@ wheels/
 
 # Virtual Environment
 venv/
+venv_new/
 ENV/
 env/
 .venv
@@ -31,7 +32,6 @@ Lib/
 pyvenv.cfg
 
 # IDEs
-.vscode/
 .idea/
 *.swp
 *.swo
