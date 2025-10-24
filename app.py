@@ -1,8 +1,6 @@
 import streamlit as st
 from youtube_utils import extract_video_id, get_transcript, format_transcript, detect_language
 from summarizer import Summarizer
-from api_summarizer import APISummarizer
-from hybrid_summarizer import HybridSummarizer
 from gpu_utils import display_gpu_status, GPUDetector
 import time
 import os
