@@ -36,12 +36,10 @@ with st.sidebar:
         show_transcript = st.checkbox("원본 자막 보기", value=False)
         
         
-    # GPU 상태 확인
-    with st.expander("🖥️ GPU 상태", expanded=True):
-        display_gpu_status()
-    
-    # ffmpeg 상태 확인
-    with st.expander("🔧 시스템 상태", expanded=True):
+    # --- 시스템 상태 확인 (캐싱 적용) ---
+    @st.cache_data(show_spinner=False)
+    def get_system_status():
+        """GPU와 ffmpeg 상태를 한 번만 확인하여 결과를 캐싱합니다."""
         ffmpeg_found = False
         ffmpeg_paths = [
             "C:\\ffmpeg\\bin\\ffmpeg.exe",  # 권장 설치 경로
@@ -50,6 +48,7 @@ with st.sidebar:
             "ffmpeg"  # PATH에 있는 경우
         ]
         
+        ffmpeg_path_found = None
         for path in ffmpeg_paths:
             try:
                 import subprocess
@@ -59,20 +58,31 @@ with st.sidebar:
                     result = subprocess.run([path, "-version"], capture_output=True, text=True, timeout=5)
                 
                 if result.returncode == 0:
-                    st.success(f"✅ ffmpeg 발견: {path}")
                     ffmpeg_found = True
+                    ffmpeg_path_found = path
                     break
             except:
                 continue
         
+        gpu_info = GPUDetector().get_device_info()
+        return gpu_info, ffmpeg_found, ffmpeg_path_found
+
+    # 캐시된 시스템 상태 정보 가져오기
+    gpu_device_info, ffmpeg_found, ffmpeg_path_found = get_system_status()
+
+    # GPU 상태 표시
+    with st.expander("🖥️ GPU 상태", expanded=True):
+        if gpu_device_info["gpu_available"]:
+            st.success(f"✅ GPU: {gpu_device_info['gpu_name']} ({gpu_device_info['vram_gb']:.1f}GB)")
+        else:
+            st.warning("⚠️ GPU 미감지 (CPU 모드)")
+
+    # ffmpeg 상태 표시
+    with st.expander("🔧 시스템 상태", expanded=True):
         if not ffmpeg_found:
             st.warning("⚠️ ffmpeg 미설치 또는 PATH 미설정")
-            st.info("""
-            💡 **권장 설치 방법:**
-            1. [ffmpeg 다운로드](https://www.gyan.dev/ffmpeg/builds/)
-            2. `C:\\ffmpeg\\` 폴더에 압축 해제
-            3. 최종 경로: `C:\\ffmpeg\\bin\\ffmpeg.exe`
-            """)
+        else:
+            st.success(f"✅ ffmpeg 발견: {ffmpeg_path_found}")
 
 # 저장된 결과가 있으면 표시
 if 'summary_result' in st.session_state:
@@ -143,6 +153,14 @@ with col2:
     4. 결과 확인 및 다운로드
     """)
 
+# --- 모델 로딩 ---
+# 앱 시작 시 한 번만 모델을 로드하여 성능 향상
+@st.cache_resource
+def load_models():
+    summarizer = Summarizer()
+    detector = GPUDetector()
+    return summarizer, detector
+
 # 요약 실행
 if st.button("🚀 요약하기", type="primary"):
     if not url:
@@ -153,6 +171,9 @@ if st.button("🚀 요약하기", type="primary"):
         status_text = st.empty()
         
         try:
+            # 캐시된 모델 로드
+            summarizer, detector = load_models()
+
             # 1단계: 비디오 ID 추출
             status_text.text("비디오 ID 추출 중...")
             progress_bar.progress(10)
@@ -211,14 +232,12 @@ if st.button("🚀 요약하기", type="primary"):
             st.info("📏 요약 길이: 자동 조절 (제한 없음)")
             
             # 자동 모델 선택으로 요약
-            summarizer = Summarizer()
             summary = summarizer.summarize_text(
                 transcript_text, 
                 language=target_lang
             )
             
             # 사용된 모델 정보 표시
-            detector = GPUDetector()
             device_info = detector.get_device_info()
             vram_gb = device_info["vram_gb"]
             device = device_info["device"]

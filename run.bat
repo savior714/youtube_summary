@@ -1,10 +1,43 @@
 @echo off
-REM 간단한 실행 스크립트 - AI가 실행하기 쉬운 버전
+chcp 65001 > nul
+setlocal enabledelayedexpansion
 cd /d "%~dp0"
 
-if exist "Scripts\streamlit.exe" (
-    Scripts\streamlit.exe run app.py
-) else (
-    python -m streamlit run app.py
+echo ======================================================
+echo  YouTube Summarizer - Starting Streamlit App
+echo ======================================================
+echo.
+
+echo [1/2] Checking environment...
+
+REM Check if Scripts\streamlit.exe exists
+if exist ".\Scripts\streamlit.exe" (
+    echo  [OK] Found Streamlit in project Scripts folder
+    echo.
+    echo [2/2] Starting Streamlit server...
+    echo.
+    ".\Scripts\streamlit.exe" run app.py
+    goto :end
 )
 
+REM Check if venv_new\Scripts\streamlit.exe exists
+if exist ".\venv_new\Scripts\streamlit.exe" (
+    echo  [OK] Found Streamlit in venv_new folder
+    echo.
+    echo [2/2] Starting Streamlit server...
+    echo.
+    ".\venv_new\Scripts\streamlit.exe" run app.py
+    goto :end
+)
+
+REM Fallback to system Python
+echo  [INFO] Using system Python/Streamlit
+echo.
+echo [2/2] Starting Streamlit server...
+echo.
+python -m streamlit run app.py
+
+:end
+echo.
+echo Script finished. Check above for any errors.
+pause
